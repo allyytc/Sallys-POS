@@ -59,11 +59,8 @@ let oatMilkSubs = {};
 
 
 
-// NEW: These functions replace all hardcoded data. Each one hits a
-// API route that runs a SELECT query on the database.
-// fetchProducts() also builds the oat milk substitution map dynamically
-// from the substituteProductID column in the Products table, replacing
-// the old hardcoded oatMilkSubs object.
+// Load Products, Inventory, Customers, and Orders from the API.
+// fetchProducts() builds the oat-milk map from substituteProductID.
 async function fetchProducts() {
     try {
         const res = await fetch('/api/products');
@@ -156,8 +153,7 @@ const itemsGrid = document.getElementById('items-grid');
 const orderList = document.getElementById('order-list');
 const orderTotalVal = document.getElementById('order-total-val');
 
-// Had to change slightly to match with new sub logic
-// Pretty much the same
+// Oat-milk products are reached only through the substitute button.
 function renderMenu() {
     itemsGrid.innerHTML = '';
     menuItems.forEach((item) => {
@@ -178,7 +174,6 @@ function renderMenu() {
     });
 }
 
-// Updated
 function addToOrder(item) {
 
     // Check stock before adding
@@ -240,7 +235,6 @@ function renderOrder() {
             li.querySelector('.sub-btn').onclick = () => {
                 const subItem = oatMilkSubs[item.productName];
                 if (subItem) {
-                    // Updated
                     order[idx] = {
                         productID: subItem.productID,
                         productName: subItem.productName,
@@ -310,9 +304,7 @@ navButtons.forEach(btn => {
             p.style.display = p.id === 'page-' + target ? '' : 'none';
         });
 
-        // CHANGE: Tab clicks now fetch fresh data from the DB before rendering.
-        // This means if someone else changed data (or you used PHPMyAdmin),
-        // switching tabs will pick up those changes.
+        // Refresh the data for the tab being opened.
         if (target === 'history') {
             await fetchCompletedOrders();
             await fetchQueuedOrders();
@@ -337,9 +329,7 @@ navButtons.forEach(btn => {
 
 // --- Order History ---
 
-// CHANGE: Now async. Items come from the OrderHasProducts JOIN query
-// instead of being stored in a local array. The DB already groups by
-// product with a quantity column, so no client-side aggregation needed.
+// Completed orders. Line items load on click from OrderHasProducts.
 function renderHistory() {
     const tbody = document.getElementById('history-tbody');
     tbody.innerHTML = '';
@@ -360,7 +350,6 @@ function renderHistory() {
 }
 
 
-// Very Updated
 async function showHistoryOrder(idx) {
     const entry = orderHistory[idx];
     const items = await fetchOrderItems(entry.orderID);
@@ -400,8 +389,7 @@ async function showHistoryOrder(idx) {
 
 // --- Queue Rendering ---
 
-// CHANGE: Time is now parsed from the DB datetime field instead of
-// being a string we stored when the order was created locally.d
+// Active queue. Times come from the orderDate column.
 function renderQueue() {
     const tbody = document.getElementById('queue-tbody');
     const emptyMsg = document.getElementById('queue-empty-msg');
@@ -418,10 +406,8 @@ function renderQueue() {
         const tr = document.createElement('tr');
         if (selectedQueueIdx === idx) tr.classList.add('selected');
 
-        // Added
         const d = new Date(entry.orderDate);
         const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-        // End update
 
         tr.setAttribute('data-tooltip', `Click to view ${entry.customerName}'s order`);
         tr.innerHTML = `
@@ -434,8 +420,7 @@ function renderQueue() {
     });
 }
 
-// CHANGE: Now async. Fetches items from DB via JOIN instead of reading
-// from the local queue entry. Passes fetched items to edit mode.
+// Show a queued order and its line items.
 async function showQueueOrder(idx) {
     selectedQueueIdx = idx;
     const entry = activeQueue[idx];
@@ -481,8 +466,7 @@ async function showQueueOrder(idx) {
     document.querySelectorAll('#history-tbody tr').forEach(r => r.classList.remove('selected'));
 }
 
-// Rewritten: uses a live editItems array so new items can be added via
-// the dropdown, not just existing ones having their quantity changed.
+// Edit a queued order: change quantities, add products, or remove a line by setting quantity to 0.
 async function enableQueueEditMode(idx, items) {
     const entry = activeQueue[idx];
     const panel = document.getElementById('history-order-summary');
@@ -580,8 +564,7 @@ async function enableQueueEditMode(idx, items) {
 }
 
 
-// Rewritten: editItems array is passed directly (quantities already mutated
-// by the live inputs), so no DOM reading needed here.
+// Send quantity changes to PUT /api/orders/:id/items.
 async function saveQueueEdit(idx, editItems) {
     const entry = activeQueue[idx];
 
@@ -623,8 +606,7 @@ async function saveQueueEdit(idx, editItems) {
     }
 }
 
-// CHANGE: Instead of manually moving data between local arrays,
-// tells the backend to flip the status column from 'queued' to 'completed'.
+// Mark a queued order completed (PUT /api/orders/:id/complete).
 async function completeQueueOrder(idx) {
     const entry = activeQueue[idx];
     try {
@@ -646,8 +628,7 @@ async function completeQueueOrder(idx) {
     }
 }
 
-// CHANGE: Backend handles inventory restoration and order deletion
-// in a transaction instead of local array manipulation.
+// Cancel a queued order. The procedure restores stock, then deletes the order.
 async function cancelQueueOrder(idx) {
     const entry = activeQueue[idx];
     try {
@@ -667,7 +648,7 @@ async function cancelQueueOrder(idx) {
     }
 }
 
-// Change: moved into its own function from completeQueueOrder and cancelQueueOrder
+// Restore the history sidebar to its empty state.
 function resetHistorySidebar() {
     const panel = document.getElementById('history-order-summary');
     panel.innerHTML = `
@@ -725,18 +706,14 @@ function renderStatusList() {
         if (item.productStock === 0) color = 'red';
         else if (item.productStock < 100) color = 'yellow';
 
-        // Only show items that need attention? Or all? 
-        // Showing all for now based on previous code, or just red/yellow to save space.
         const li = document.createElement('li');
         li.setAttribute('data-tooltip', `Click to view ${item.productName} details (Stock: ${item.productStock})`);
         li.innerHTML = `
             <span>${item.productName}</span>
             <span class="status-dot ${color}"></span>
         `;
-        // Allow clicking status items to open details too
         li.style.cursor = 'pointer';
         li.onclick = () => {
-            // Find original index if needed, or just pass item
             showInventoryItem(item);
         };
         statusList.appendChild(li);
@@ -812,10 +789,7 @@ document.getElementById('btn-inv-edit').onclick = () => {
     toggleInvEditMode(true);
 };
 
-// 3. Confirm/Save Button
-// CHANGE: Now sends the update to the database instead of just
-// changing the local object. Re-fetches inventory after saving
-// so the UI reflects the actual DB state.
+// Save stock and location, then reload inventory from the database.
 document.getElementById('btn-inv-confirm').onclick = async () => {
     const newStock = parseInt(document.getElementById('edit-inv-stock').value);
     const newLoc = document.getElementById('edit-inv-location').value.trim();
@@ -825,14 +799,12 @@ document.getElementById('btn-inv-confirm').onclick = async () => {
             const res = await fetch(`/api/inventory/${currentInvItem.inventoryID}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                // Update Data
                 body: JSON.stringify({ productStock: newStock, productLocation: newLoc })
             });
             const data = await res.json();
             if (data.success) {
                 await fetchInventory();
 
-                // Update UI
                 renderInventory();
 
                 // Re-select the updated item
@@ -885,7 +857,6 @@ function renderCustomers(results) {
     });
 }
 
-// --- Updated showCustomerProfile in main.js ---
 function showCustomerProfile(customer) {
     renderProfileViewMode(customer);
 }
@@ -919,7 +890,6 @@ async function renderProfileViewMode(customer) {
     // 2. Attach Listener to Edit Button
     document.getElementById('edit-profile-btn').onclick = () => enableEditMode(customer);
 
-    // 3. Render Orders (Same as before)
     await renderProfileOrders(customer);
 }
 
@@ -984,10 +954,7 @@ function enableEditMode(customer) {
         if (isMarkedForDeletion) {
             // DELETE customer using stored procedure via API
             try {
-
-                // CHANGE: Delete now goes through the backend stored procedure.
-                // CASCADE handles removing the customer's orders and order items.
-                // refreshAllData() is called because the cascade affects multiple tables.
+                // sp_delete_customer removes the customer. Orders and their line items follow ON DELETE CASCADE.
                 const res = await fetch(`/api/customers/${customer.customerID}`, { method: 'DELETE' });
                 const data = await res.json();
                 if (data.success) {
@@ -1041,9 +1008,7 @@ function enableEditMode(customer) {
     };
 }
 
-// Helper to render the order list
-// CHANGE: Now fetches this customer's orders from a dedicated API endpoint
-// that does the JOIN server-side, instead of filtering the local array.
+// Completed orders for one customer, including line items from the API.
 async function renderProfileOrders(customer) {
     const orderContainer = document.getElementById('profile-order-list');
     const orders = await fetchCustomerOrders(customer.customerID);
@@ -1112,7 +1077,7 @@ document.getElementById('search-customer-btn').addEventListener('click', async (
 function isValidPhone(phone) {
     return /^\d{3}-\d{3}-\d{4}$/.test(phone);
 }
-// Add: Update array, clear inputs, show all
+// Create a customer from the name and phone fields.
 document.getElementById('add-customer-btn').addEventListener('click', async () => {
     const name = nameInp.value.trim();
     const number = numberInp.value.trim();
@@ -1284,13 +1249,8 @@ placeOrderBtn.addEventListener('click', async () => {
         }
     }
 
-    // Reserve inventory immediately when order enters queue
+    // Stock is reserved when the order enters the queue. Points change on completion.
     try {
-
-        // CHANGE: The entire order placement is now a single API call.
-        // The backend handles it in a DB transaction: creates the order,
-        // inserts items into OrderHasProducts, decrements inventory,
-        // and updates customer points — all atomically.
         const res = await fetch('/api/orders', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1332,9 +1292,7 @@ document.getElementById('redeem-drink-btn').addEventListener('click', () => {
 });
 
 
-// NEW: Calls the stored procedure sp_reset_sally_coffee() which drops
-// all tables, recreates them, and reinserts the original sample data.
-// Then refreshes all local data and re-renders every page.
+// POST /api/reset runs sp_reset_sally_coffee(), then reloads and re-renders the UI.
 document.getElementById('reset-btn').addEventListener('click', async () => {
     if (!confirm('Are you sure you want to reset the database?\n\nThis will erase all changes and restore the original sample data.')) {
         return;
@@ -1400,8 +1358,7 @@ async function updateOrderHeader() {
 setInterval(updateOrderHeader, 1000);
 
 
-// CHANGE: App startup now fetches all data from the database before
-// rendering anything. Without this, all pages would be empty.
+// Load database data before the first render.
 async function init() {
     await refreshAllData();
     renderMenu();

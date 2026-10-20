@@ -162,13 +162,12 @@ DELIMITER ;
 
 -- -------------------------------------------------------
 -- 3. sp_place_order
--- Purpose: Inserts a new order with status='queued', updates
---          the customer's points (add drinkCount, subtract
---          redeemedPoints), and returns the new orderID via
---          an OUT parameter. The Node.js route handles the
---          per-item inserts into OrderHasProducts and the
---          inventory decrements in a loop after calling this.
--- Usage:   CALL sp_place_order(1, 12.50, 2, 0, @newOrderID);
+-- Purpose: Inserts a new order with status='queued', stores
+--          redeemedPoints on that row, and returns the new
+--          orderID via an OUT parameter. Points are not
+--          changed here. The Node.js route then inserts
+--          OrderHasProducts rows and decrements Inventory.
+-- Usage:   CALL sp_place_order(1, 12.50, 2, @newOrderID);
 --          SELECT @newOrderID;
 -- -------------------------------------------------------
 
@@ -197,9 +196,11 @@ DELIMITER ;
 
 -- -------------------------------------------------------
 -- 4. sp_complete_order
--- Purpose: Marks a queued order as completed by updating
---          the status column. Called when the barista clicks
---          "Complete Order" in the Order History queue.
+-- Purpose: Marks a queued order as completed and updates the
+--          customer's points: one point per drink quantity,
+--          minus the redeemedPoints stored on the order.
+--          Called when the barista clicks "Complete Order"
+--          in the Order History queue.
 -- Usage:   CALL sp_complete_order(5004);
 -- -------------------------------------------------------
 
@@ -232,7 +233,7 @@ BEGIN
     WHERE orderID = p_orderID;
 
     -- Award points now that the order is complete:
-    -- +1 per drink ordered, -10 if a free drink was redeemed
+    -- +1 per drink quantity, minus redeemedPoints stored on the order.
     UPDATE Customers
     SET numPoints = numPoints + v_drinkCount - v_redeemedPoints
     WHERE customerID = v_customerID;
