@@ -500,8 +500,7 @@ body {
 }
 
 
-/* IMPLEMENTED FOR CUSTOMER TAB */
-/* SPECIFICALLY FOR UPDATING/DELETING CUSTOMERS*/
+/* Customer profile edit and delete */
 
 .profile-header-row {
     display: flex;
